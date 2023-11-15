@@ -2,81 +2,80 @@ package main
 
 import (
 	"fmt"
+	"net/http"
 	"os"
+	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 )
 
+const url = "https://charm.sh/"
+
 type model struct {
-	choices  []string         // items on the the to-do list
-	cursor   int              // which to-do list item our cursor is pointing at
-	selected map[int]struct{} // which to-do items are selected
+	status int
+	err    error
 }
 
-func initialModel() model {
-	return model{
-		// our to-do list is a grocery list
-		choices:  []string{"Buy carrots", "Buy celery", "Buy kohlrabi", "Buy Pizza"},
-		selected: make(map[int]struct{}),
+func checkServer() tea.Msg {
+
+	c := &http.Client{Timeout: 10 * time.Second}
+	res, err := c.Get(url)
+
+	if err != nil {
+		return errMsg{err}
 	}
+	return statusMsg(res.StatusCode)
 }
+
+type statusMsg int
+
+type errMsg struct{ err error }
+
+func (e errMsg) Error() string { return e.err.Error() }
 
 func (m model) Init() tea.Cmd {
-	// return `nil`, no I/O right now
-	return nil
+	return checkServer
 }
 
 func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
+
+	case statusMsg:
+
+		m.status = int(msg)
+		return m, tea.Quit
+
+	case errMsg:
+		m.err = msg
+		return m, tea.Quit
+
 	case tea.KeyMsg:
-		switch msg.String() {
-		case "ctrl+c", "q":
+
+		if msg.Type == tea.KeyCtrlC {
 			return m, tea.Quit
-		case "up,", "k":
-			if m.cursor > 0 {
-				m.cursor--
-			}
-		case "down", "j":
-			if m.cursor < len(m.choices)-1 {
-				m.cursor++
-			}
-		case "enter", " ":
-			_, ok := m.selected[m.cursor]
-			if ok {
-				delete(m.selected, m.cursor)
-			} else {
-				m.selected[m.cursor] = struct{}{}
-			}
 		}
 	}
+
 	return m, nil
 }
 
 func (m model) View() string {
-	s := "What should we buy at the market?\n\n"
-	for i, choice := range m.choices {
-		cursor := " "
-		if m.cursor == i {
-			cursor = ">"
-		}
-
-		checked := " "
-		if _, ok := m.selected[i]; ok {
-			checked = "x"
-		}
-
-		s += fmt.Sprintf("%s [%s] %s\n", cursor, checked, choice)
-
+	if m.err != nil {
+		return fmt.Sprintf("\nWe had some trouble: %v\n\n", m.err)
 	}
-	s += "\n Press q to quit.\n"
 
-	return s
+	s := fmt.Sprintf("Checking %s ... ", url)
+
+	if m.status > 0 {
+		s += fmt.Sprintf("%d %s!", m.status, http.StatusText(m.status))
+	}
+
+	return "\n" + s + "\n\n"
 }
 
 func main() {
-	p := tea.NewProgram(initialModel())
-	if _, err := p.Run(); err != nil {
-		fmt.Printf("Alas, there's been an error: %v", err)
+	if _, err := tea.NewProgram(model{}).Run(); err != nil {
+		fmt.Printf("Uh oh, there was an error: %v\n", err)
 		os.Exit(1)
 	}
 }
