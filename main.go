@@ -8,19 +8,21 @@ import (
 )
 
 type model struct {
-	choices  []string
-	cursor   int
-	selected map[int]struct{}
+	choices  []string         // items on the the to-do list
+	cursor   int              // which to-do list item our cursor is pointing at
+	selected map[int]struct{} // which to-do items are selected
 }
 
 func initialModel() model {
 	return model{
+		// our to-do list is a grocery list
 		choices:  []string{"Buy carrots", "Buy celery", "Buy kohlrabi", "Buy Pizza"},
 		selected: make(map[int]struct{}),
 	}
 }
 
 func (m model) Init() tea.Cmd {
+	// return `nil`, no I/O right now
 	return nil
 }
 
